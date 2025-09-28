@@ -7,6 +7,8 @@ from datetime import datetime, timedelta, date
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 import html
+from fastapi import FastAPI, Request
+from aiogram import types
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import CommandStart, Command
 from aiogram.filters.command import CommandObject
@@ -17,7 +19,9 @@ from dotenv import load_dotenv
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
-
+BASE_URL = os.getenv("BASE_URL")                  # напр. https://parahod.onrender.com
+WEBHOOK_PATH = os.getenv("WEBHOOK_PATH", "/webhook")
+WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "secret")
 # дата начала семестра: 1-я учебная неделя = неделя, начинающаяся в этот день
 SEMESTER_START_ENV = os.getenv("SEMESTER_START")  # YYYY-MM-DD
 DATA_DIR = Path("./data"); DATA_DIR.mkdir(exist_ok=True)
@@ -494,9 +498,32 @@ async def show_day(m: Message, command: CommandObject):
     await m.answer("\n".join(lines), parse_mode="HTML")
 
 # ========= Точка входа =========
-async def main():
-    print("Bot started")
-    await dp.start_polling(bot)
 
-if __name__ == "__main__":
-    asyncio.run(main())
+
+
+app = FastAPI()
+
+@app.on_event("startup")
+async def on_startup():
+    if not BASE_URL:
+        raise RuntimeError("BASE_URL не задан")
+    await bot.set_webhook(f"{BASE_URL}{WEBHOOK_PATH}", secret_token=WEBHOOK_SECRET)
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    await bot.delete_webhook()
+
+
+@app.get("/")
+async def root():
+    return {"ok": True, "service": "parahod-bot"}
+
+@app.post(WEBHOOK_PATH)
+async def telegram_webhook(request: Request):
+    if request.headers.get("X-Telegram-Bot-Api-Secret-Token") != WEBHOOK_SECRET:
+        return {"ok": False}
+    data = await request.json()
+    update = types.Update.model_validate(data)
+    await dp.feed_update(bot, update)
+    return {"ok": True}
+
