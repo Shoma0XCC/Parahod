@@ -7,4 +7,4 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY . .
 # создаём каталог для сохранения расписаний
 RUN mkdir -p /app/data
-CMD ["python", "bot.py"]
+CMD ["python", "main.py"]
