@@ -12,7 +12,7 @@ from aiogram import types
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import CommandStart, Command
 from aiogram.filters.command import CommandObject
-from aiogram.types import Message
+from aiogram.types import Message, Chat
 from dotenv import load_dotenv
 
 # ========= Константы/настройки =========
@@ -282,29 +282,44 @@ async def start(m: Message):
         + sem_info
     )
 
+def scope_id(m: Message) -> str:
+    if m.chat.type in {"group", "supergroup"}:
+        return str(m.chat.id)      # одна настройка на весь групповой чат
+    return str(m.from_user.id)
+
 @dp.message(Command("setgroup"))
 async def setgroup(m: Message, command: CommandObject):
     args = (command.args or "").strip()
     if not args:
-        await m.answer("Укажи группу: /setgroup ИВТ-21")
+        await m.answer("Укажи учебную группу: /setgroup ИВТ-21")
         return
     users = load_users()
-    users[str(m.from_user.id)] = args
+    users[scope_id(m)] = args
     save_users(users)
-    await m.answer(f"Ок, запомнил: **{args}**")
+    where = "для этого чата" if m.chat.type in {"group","supergroup"} else "для тебя"
+    await m.answer(f"Ок, запомнил {where}: <b>{html.escape(args)}</b>", parse_mode="HTML")
+
 
 @dp.message(Command("parahod"))
 async def parahod(m: Message, command: CommandObject):
     raw = (command.args or "").strip()
     parts = raw.split()
     if not parts:
-        await m.answer("Формат: /parahod сегодня|завтра|неделя [группа]")
+        await m.answer("Формат: /parahod сегодня|завтра|неделя [учебная_группа]")
         return
 
     mode = parts[0].lower()
-    group = " ".join(parts[1:]) if len(parts) > 1 else load_users().get(str(m.from_user.id))
+    # если в команде явно указали учебную группу — используем её
+    if len(parts) > 1:
+        group = " ".join(parts[1:])
+    else:
+        group = load_users().get(scope_id(m))  # берем сохранённую для этого чата/пользователя
+
     if not group:
-        await m.answer("Не нашёл твою группу. Укажи её: /setgroup ИВТ-21")
+        hint = ("Сначала укажи учебную группу для чата: /setgroup ИВТ-21"
+                if m.chat.type in {"group","supergroup"}
+                else "Укажи учебную группу: /setgroup ИВТ-21")
+        await m.answer(hint)
         return
 
     sem = load_semester_start()
