@@ -6,3 +6,4 @@ services:
     env_file: .env
     volumes:
       - ./data:/app/data   # чтобы JSON с расписанием жили вне контейнера
+
