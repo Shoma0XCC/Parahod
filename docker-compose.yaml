@@ -5,4 +5,4 @@ services:
     restart: unless-stopped
     env_file: .env
     volumes:
-      - ./data:/app/data  # сохраняем JSON с расписанием вне контейнера
+      - ./data:/app/data   # чтобы JSON с расписанием жили вне контейнера
