@@ -283,21 +283,49 @@ async def start(m: Message):
     )
 
 def scope_id(m: Message) -> str:
-    if m.chat.type in {"group", "supergroup"}:
-        return str(m.chat.id)      # одна настройка на весь групповой чат
+    # одна настройка на чат/супергруппу/канал
+    if m.chat.type in {"group", "supergroup", "channel"}:
+        return str(m.chat.id)
+    # в личке — персональная настройка
     return str(m.from_user.id)
 
-@dp.message(Command("setgroup"))
-async def setgroup(m: Message, command: CommandObject):
-    args = (command.args or "").strip()
+async def is_chat_admin(message: Message) -> bool:
+    # в личке — всегда ок
+    if message.chat.type == "private":
+        return True
+    try:
+        member = await bot.get_chat_member(message.chat.id, message.from_user.id)
+        return member.status in {"administrator", "creator"}
+    except Exception:
+        return False
+
+async def _setgroup_impl(m: Message, args: str):
+    args = (args or "").strip()
+    # если аргумента нет — подсказываем, куда сохраняем
     if not args:
-        await m.answer("Укажи учебную группу: /setgroup ИВТ-21")
+        target = "для этого чата" if m.chat.type != "private" else "для тебя"
+        await m.answer(f"Укажи учебную группу {target}: /setgroup ИВТ-21")
         return
+
+    # в группах/каналах менять может только админ
+    if m.chat.type in {"group", "supergroup", "channel"}:
+        if not await is_chat_admin(m):
+            await m.answer("Только админ этого чата/канала может менять учебную группу.")
+            return
+
     users = load_users()
     users[scope_id(m)] = args
     save_users(users)
-    where = "для этого чата" if m.chat.type in {"group","supergroup"} else "для тебя"
+    where = "для этого чата" if m.chat.type in {"group","supergroup","channel"} else "для тебя"
     await m.answer(f"Ок, запомнил {where}: <b>{html.escape(args)}</b>", parse_mode="HTML")
+
+@dp.message(Command("setgroup"))
+async def setgroup_msg(m: Message, command: CommandObject):
+    await _setgroup_impl(m, command.args)
+
+@dp.channel_post(Command("setgroup"))
+async def setgroup_channel(m: Message, command: CommandObject):
+    await _setgroup_impl(m, command.args)
 
 
 @dp.message(Command("parahod"))
@@ -342,6 +370,11 @@ async def parahod(m: Message, command: CommandObject):
         await m.answer(format_week(group, sem, schedules), parse_mode="HTML")
     else:
         await m.answer("Не понял режим. Используй: сегодня | завтра | неделя")
+
+@dp.channel_post(Command("parahod"))
+async def parahod_channel(m: Message, command: CommandObject):
+    # переиспользуем существующую логику для Message
+    await parahod(m, command)
 
 # ========= Админ-команды =========
 def is_admin(uid: int) -> bool:
