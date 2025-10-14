@@ -22,6 +22,7 @@ ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 BASE_URL = os.getenv("BASE_URL")                  # напр. https://parahod.onrender.com
 WEBHOOK_PATH = os.getenv("WEBHOOK_PATH", "/webhook")
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "secret")
+DEFAULT_GROUP_ENV = os.getenv("DEFAULT_GROUP")
 # дата начала семестра: 1-я учебная неделя = неделя, начинающаяся в этот день
 SEMESTER_START_ENV = os.getenv("SEMESTER_START")  # YYYY-MM-DD
 DATA_DIR = Path("./data"); DATA_DIR.mkdir(exist_ok=True)
@@ -342,13 +343,8 @@ async def parahod(m: Message, command: CommandObject):
         group = " ".join(parts[1:])
     else:
         group = load_users().get(scope_id(m))  # берем сохранённую для этого чата/пользователя
-
     if not group:
-        hint = ("Сначала укажи учебную группу для чата: /setgroup ИВТ-21"
-                if m.chat.type in {"group","supergroup"}
-                else "Укажи учебную группу: /setgroup ИВТ-21")
-        await m.answer(hint)
-        return
+        group = DEFAULT_GROUP_ENV
 
     sem = load_semester_start()
     if not sem:
